@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aviator - Game Controller</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      background-color: #0f111a;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .container {
+      background: #1a1d2d;
+      padding: 30px;
+      border-radius: 15px;
+      text-align: center;
+      border: 1px solid #2d324f;
+      width: 90%;
+      max-width: 400px;
+    }
+    h2 {
+      margin-bottom: 5px;
+      color: #e50b2e;
+      font-style: italic;
+    }
+    .status {
+      margin-bottom: 25px;
+      color: #8c90b5;
+      font-size: 14px;
+    }
+    .status span {
+      font-weight: bold;
+      font-size: 16px;
+      text-transform: uppercase;
+    }
+    .btn {
+      width: 100%;
+      padding: 15px;
+      margin-bottom: 15px;
+      border: none;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      color: white;
+      transition: 0.2s;
+    }
+    .btn:active {
+      transform: scale(0.95);
+    }
+    .btn-normal {
+      background-color: #28a745;
+    }
+    .btn-lost {
+      background-color: #e50b2e;
+    }
+    .message {
+      height: 20px;
+      font-size: 14px;
+      color: #28a745;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>AVIATOR CONTROLLER</h2>
+    <div class="status">Current Mode: <span id="currentMode">Loading...</span></div>
+
+    <button class="btn btn-normal" onclick="setMode('normal')">NORMAL MODE</button>
+    <button class="btn btn-lost" onclick="setMode('lost')">LOST MODE (1x - 2x)</button>
+
+    <div class="message" id="msg"></div>
+  </div>
+
+  <script>
+    const supabaseUrl = 'https://vtobhkwzvwaaxxtikxfq.supabase.co';
+    const supabaseKey = 'sb_publishable_839dZUvDqZvNy9n5HtIttA_Nz3cWsdn';
+    
+    // නම 'controlSupabase' කියලා වෙනස් කළා
+    const controlSupabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+    async function loadCurrentMode() {
+      const { data, error } = await controlSupabase.from('game_state').select('game_mode').eq('id', 1).single();
+      if (!error && data) {
+        updateUI(data.game_mode);
+      }
+    }
+
+    function updateUI(mode) {
+      const modeText = document.getElementById('currentMode');
+      modeText.innerText = mode === 'lost' ? 'LOST MODE' : 'NORMAL MODE';
+      modeText.style.color = mode === 'lost' ? '#e50b2e' : '#28a745';
+    }
+
+    async function setMode(mode) {
+      document.getElementById('msg').innerText = 'Updating...';
+      const { error } = await controlSupabase.from('game_state').update({ game_mode: mode }).eq('id', 1);
+      
+      if (error) {
+        document.getElementById('msg').innerText = 'Error: Could not update mode!';
+        document.getElementById('msg').style.color = '#e50b2e';
+      } else {
+        document.getElementById('msg').innerText = mode === 'lost' ? 'Lost Mode Activated!' : 'Normal Mode Activated!';
+        document.getElementById('msg').style.color = '#28a745';
+        updateUI(mode);
+      }
+      setTimeout(() => document.getElementById('msg').innerText = '', 3000);
+    }
+
+    // Realtime Listener
+    controlSupabase.channel('game_mode_sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_state' }, payload => {
+        if (payload.new && payload.new.game_mode) {
+          updateUI(payload.new.game_mode);
+        }
+      }).subscribe();
+
+    loadCurrentMode();
+  </script>
+
+</body>
+</html>
