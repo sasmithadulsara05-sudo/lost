@@ -47,7 +47,7 @@
       margin-bottom: 15px;
       border: none;
       border-radius: 10px;
-      font-size: 18px;
+      font-size: 16px;
       font-weight: bold;
       cursor: pointer;
       color: white;
@@ -56,12 +56,10 @@
     .btn:active {
       transform: scale(0.95);
     }
-    .btn-normal {
-      background-color: #28a745;
-    }
-    .btn-lost {
-      background-color: #e50b2e;
-    }
+    .btn-normal { background-color: #28a745; }
+    .btn-auto { background-color: #ff9800; }
+    .btn-lost { background-color: #e50b2e; }
+    
     .message {
       height: 20px;
       font-size: 14px;
@@ -75,8 +73,9 @@
     <h2>AVIATOR CONTROLLER</h2>
     <div class="status">Current Mode: <span id="currentMode">Loading...</span></div>
 
-    <button class="btn btn-normal" onclick="setMode('normal')">NORMAL MODE</button>
-    <button class="btn btn-lost" onclick="setMode('lost')">LOST MODE (1x - 2x)</button>
+    <button class="btn btn-normal" onclick="setMode('normal')">NORMAL MODE (Chart)</button>
+    <button class="btn btn-auto" onclick="setMode('auto')">AUTO MODE (AI - Bet = Lost)</button>
+    <button class="btn btn-lost" onclick="setMode('lost')">LOST MODE (Always 1x-2x)</button>
 
     <div class="message" id="msg"></div>
   </div>
@@ -85,7 +84,6 @@
     const supabaseUrl = 'https://vtobhkwzvwaaxxtikxfq.supabase.co';
     const supabaseKey = 'sb_publishable_839dZUvDqZvNy9n5HtIttA_Nz3cWsdn';
     
-    // නම 'controlSupabase' කියලා වෙනස් කළා
     const controlSupabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
     async function loadCurrentMode() {
@@ -97,8 +95,16 @@
 
     function updateUI(mode) {
       const modeText = document.getElementById('currentMode');
-      modeText.innerText = mode === 'lost' ? 'LOST MODE' : 'NORMAL MODE';
-      modeText.style.color = mode === 'lost' ? '#e50b2e' : '#28a745';
+      if (mode === 'lost') {
+        modeText.innerText = 'LOST MODE';
+        modeText.style.color = '#e50b2e';
+      } else if (mode === 'auto') {
+        modeText.innerText = 'AUTO MODE';
+        modeText.style.color = '#ff9800';
+      } else {
+        modeText.innerText = 'NORMAL MODE';
+        modeText.style.color = '#28a745';
+      }
     }
 
     async function setMode(mode) {
@@ -109,7 +115,7 @@
         document.getElementById('msg').innerText = 'Error: Could not update mode!';
         document.getElementById('msg').style.color = '#e50b2e';
       } else {
-        document.getElementById('msg').innerText = mode === 'lost' ? 'Lost Mode Activated!' : 'Normal Mode Activated!';
+        document.getElementById('msg').innerText = 'Mode successfully activated!';
         document.getElementById('msg').style.color = '#28a745';
         updateUI(mode);
       }
