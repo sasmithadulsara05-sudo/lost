@@ -45,13 +45,19 @@
       width: 100%;
       padding: 15px;
       margin-bottom: 15px;
-      border: none;
+      border: 2px solid transparent;
       border-radius: 10px;
       font-size: 16px;
       font-weight: bold;
       cursor: pointer;
       color: white;
       transition: 0.2s;
+      opacity: 0.55;
+    }
+    .btn.active-mode {
+      opacity: 1;
+      border-color: #ffffff;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.25);
     }
     .btn:active {
       transform: scale(0.95);
@@ -64,6 +70,7 @@
       height: 20px;
       font-size: 14px;
       color: #28a745;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -73,9 +80,9 @@
     <h2>AVIATOR CONTROLLER</h2>
     <div class="status">Current Mode: <span id="currentMode">Loading...</span></div>
 
-    <button class="btn btn-normal" onclick="setMode('normal')">NORMAL MODE (Chart)</button>
-    <button class="btn btn-auto" onclick="setMode('auto')">AUTO MODE (AI - Bet = Lost)</button>
-    <button class="btn btn-lost" onclick="setMode('lost')">LOST MODE (Always 1x-2x)</button>
+    <button id="btnNormal" class="btn btn-normal" onclick="setMode('normal')">NORMAL MODE (Chart)</button>
+    <button id="btnAuto" class="btn btn-auto" onclick="setMode('auto')">AUTO MODE (AI - Bet = Lost)</button>
+    <button id="btnLost" class="btn btn-lost" onclick="setMode('lost')">LOST MODE (Always 1x-2x)</button>
 
     <div class="message" id="msg"></div>
   </div>
@@ -84,21 +91,46 @@
     const supabaseUrl = 'https://vtobhkwzvwaaxxtikxfq.supabase.co';
     const supabaseKey = 'sb_publishable_839dZUvDqZvNy9n5HtIttA_Nz3cWsdn';
     
-    const controlSupabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    // cache: 'no-store' දමා ඇති නිසා Back වී ආවත් සැමවිටම Database එකේ අලුත්ම Mode එක ලබා ගනී
+    const controlSupabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
+      global: {
+        fetch: (url, options) => fetch(url, { ...options, cache: 'no-store' })
+      }
+    });
+
+    let activeRowId = 1;
 
     async function loadCurrentMode() {
-      const { data, error } = await controlSupabase.from('game_state').select('game_mode').eq('id', 1).single();
+      const { data, error } = await controlSupabase
+        .from('game_state')
+        .select('id, game_mode')
+        .order('id', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
       if (!error && data) {
-        updateUI(data.game_mode);
+        activeRowId = data.id;
+        updateUI(data.game_mode || 'normal');
+      } else {
+        // localStorage fallback if row isn't loaded yet
+        const saved = localStorage.getItem('aviator_saved_game_mode');
+        if (saved) updateUI(saved);
       }
     }
 
     function updateUI(mode) {
+      const normalized = (mode || 'normal').toLowerCase();
+      try { localStorage.setItem('aviator_saved_game_mode', normalized); } catch {}
+
       const modeText = document.getElementById('currentMode');
-      if (mode === 'lost') {
+      document.getElementById('btnNormal').classList.toggle('active-mode', normalized === 'normal');
+      document.getElementById('btnAuto').classList.toggle('active-mode', normalized === 'auto');
+      document.getElementById('btnLost').classList.toggle('active-mode', normalized === 'lost');
+
+      if (normalized === 'lost') {
         modeText.innerText = 'LOST MODE';
         modeText.style.color = '#e50b2e';
-      } else if (mode === 'auto') {
+      } else if (normalized === 'auto') {
         modeText.innerText = 'AUTO MODE';
         modeText.style.color = '#ff9800';
       } else {
@@ -108,18 +140,26 @@
     }
 
     async function setMode(mode) {
-      document.getElementById('msg').innerText = 'Updating...';
-      const { error } = await controlSupabase.from('game_state').update({ game_mode: mode }).eq('id', 1);
+      const msgEl = document.getElementById('msg');
+      msgEl.innerText = 'Updating...';
+      msgEl.style.color = '#8c90b5';
+
+      // Row එක update කරනවා, id=1 නැත්නම් upsert හරහා අලුතින් හදලා save කරනවා
+      const { data, error } = await controlSupabase
+        .from('game_state')
+        .upsert({ id: activeRowId, game_mode: mode }, { onConflict: 'id' })
+        .select('game_mode')
+        .single();
       
       if (error) {
-        document.getElementById('msg').innerText = 'Error: Could not update mode!';
-        document.getElementById('msg').style.color = '#e50b2e';
+        msgEl.innerText = 'Error: Could not update mode!';
+        msgEl.style.color = '#e50b2e';
       } else {
-        document.getElementById('msg').innerText = 'Mode successfully activated!';
-        document.getElementById('msg').style.color = '#28a745';
-        updateUI(mode);
+        msgEl.innerText = 'Mode successfully activated!';
+        msgEl.style.color = '#28a745';
+        updateUI(data?.game_mode || mode);
       }
-      setTimeout(() => document.getElementById('msg').innerText = '', 3000);
+      setTimeout(() => { msgEl.innerText = ''; }, 3000);
     }
 
     // Realtime Listener
@@ -129,6 +169,12 @@
           updateUI(payload.new.game_mode);
         }
       }).subscribe();
+
+    // පේජ් එකෙන් Back ගිහින් ආයෙත් එනකොට සහ Tab මාරු කරනකොට Database එකෙන් Mode එක ගැනීම
+    window.addEventListener('pageshow', loadCurrentMode);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) loadCurrentMode();
+    });
 
     loadCurrentMode();
   </script>
